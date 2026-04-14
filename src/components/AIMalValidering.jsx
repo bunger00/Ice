@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import Anthropic from '@anthropic-ai/sdk';
 import { CheckCircle2 } from 'lucide-react';
 
 function AIMalValidering({ mal, onUpdateMal }) {
@@ -10,30 +9,24 @@ function AIMalValidering({ mal, onUpdateMal }) {
   const validerMal = async () => {
     setIsLoading(true);
     try {
-      const anthropic = new Anthropic({
-        apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY,
-        dangerouslyAllowBrowser: true
+      const response = await fetch('/.netlify/functions/validate-goal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mal }),
       });
 
-      const message = await anthropic.messages.create({
-        model: "claude-3-opus-20240229",
-        max_tokens: 1000,
-        messages: [{
-          role: "user",
-          content: `Vurder følgende målsetting for et møte og gi konstruktiv tilbakemelding: "${mal}". 
-                    Gi også et konkret forslag til forbedret målformulering hvis nødvendig.
-                    Svar på norsk i følgende format:
-                    VURDERING: Din vurdering her
-                    FORSLAG: Ditt forslag til forbedret målformulering her (hvis nødvendig)`
-        }]
-      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Serverfeil');
+      }
 
-      const responseText = message.content[0].text;
-      const [vurdering, forslag] = responseText.split('FORSLAG:');
-      
+      const data = await response.json();
+      const responseText = data.text;
+      const [vurdering, forslagDel] = responseText.split('FORSLAG:');
+
       setAiVurdering(vurdering.replace('VURDERING:', '').trim());
-      const rensetForslag = forslag?.trim()
-        .match(/"([^"]*)"/)?.[ 1 ] || forslag?.trim() || '';
+      const rensetForslag = forslagDel?.trim()
+        .match(/"([^"]*)"/)?.[1] || forslagDel?.trim() || '';
       setForslag(rensetForslag);
     } catch (error) {
       console.error('Feil ved AI-vurdering:', error);
@@ -51,7 +44,7 @@ function AIMalValidering({ mal, onUpdateMal }) {
       >
         {isLoading ? 'Vurderer...' : 'Valider mål'}
       </button>
-      
+
       {aiVurdering && (
         <div className="mt-2 p-4 bg-gray-50 rounded-lg max-w-md">
           <p className="text-sm text-gray-700 mb-3">{aiVurdering}</p>
@@ -74,4 +67,4 @@ function AIMalValidering({ mal, onUpdateMal }) {
   );
 }
 
-export default AIMalValidering; 
+export default AIMalValidering;
